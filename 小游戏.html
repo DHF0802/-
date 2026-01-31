@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <!-- 适配微信手机端 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>简易打方块</title>
+    <style>
+        * {margin: 0; padding: 0; box-sizing: border-box;}
+        body {background: #f0f0f0; font-family: Arial, sans-serif;}
+        .game-box {
+            position: relative;
+            width: 90%;
+            max-width: 400px;
+            height: 600px;
+            background: #222;
+            margin: 20px auto;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        /* 挡板 */
+        .paddle {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80px;
+            height: 15px;
+            background: #4fc3f7;
+            border-radius: 8px;
+        }
+        /* 小球 */
+        .ball {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background: #ffeb3b;
+            border-radius: 50%;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+        }
+        /* 方块 */
+        .brick {
+            position: absolute;
+            width: 60px;
+            height: 25px;
+            background: #81c784;
+            border-radius: 4px;
+            border: 1px solid #66bb6a;
+        }
+        /* 分数 */
+        .score {
+            text-align: center;
+            font-size: 20px;
+            color: #333;
+            margin-top: 10px;
+            font-weight: bold;
+        }
+        /* 开始/重新开始按钮 */
+        .btn {
+            display: block;
+            width: 120px;
+            height: 40px;
+            line-height: 40px;
+            text-align: center;
+            background: #2196f3;
+            color: #fff;
+            border-radius: 20px;
+            margin: 10px auto;
+            text-decoration: none;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div class="score">分数：<span id="scoreNum">0</span></div>
+    <a href="javascript:startGame()" class="btn" id="gameBtn">开始游戏</a>
+    <div class="game-box" id="gameBox"></div>
+
+    <script>
+        // 获取元素
+        const gameBox = document.getElementById('gameBox');
+        const scoreNum = document.getElementById('scoreNum');
+        const gameBtn = document.getElementById('gameBtn');
+        let paddle, ball, bricks = [];
+        let score = 0;
+        let ballX = 2, ballY = -2; // 小球移动速度
+        let gameTimer = null;
+        const boxWidth = gameBox.offsetWidth;
+        const boxHeight = gameBox.offsetHeight;
+
+        // 开始游戏
+        function startGame() {
+            // 重置游戏
+            resetGame();
+            gameBtn.style.display = 'none';
+            // 创建挡板、小球、方块
+            createPaddle();
+            createBall();
+            createBricks();
+            // 启动游戏循环
+            gameTimer = setInterval(gameLoop, 16);
+            // 触摸/鼠标控制挡板
+            gameBox.addEventListener('touchmove', movePaddle);
+            gameBox.addEventListener('mousemove', movePaddle);
+        }
+
+        // 重置游戏
+        function resetGame() {
+            score = 0;
+            scoreNum.innerText = 0;
+            ballX = 2;
+            ballY = -2;
+            clearInterval(gameTimer);
+            gameBox.innerHTML = '';
+            bricks = [];
+        }
+
+        // 创建挡板
+        function createPaddle() {
+            paddle = document.createElement('div');
+            paddle.className = 'paddle';
+            gameBox.appendChild(paddle);
+        }
+
+        // 创建小球
+        function createBall() {
+            ball = document.createElement('div');
+            ball.className = 'ball';
+            gameBox.appendChild(ball);
+        }
+
+        // 创建方块（4行8列，适配手机）
+        function createBricks() {
+            const brickWidth = 60, brickHeight = 25;
+            const gap = 10; // 方块间距
+            const row = 4, col = Math.floor((boxWidth - gap) / (brickWidth + gap));
+            for (let i = 0; i < row; i++) {
+                for (let j = 0; j < col; j++) {
+                    const brick = document.createElement('div');
+                    brick.className = 'brick';
+                    brick.style.left = j * (brickWidth + gap) + gap + 'px';
+                    brick.style.top = i * (brickHeight + gap) + 30 + 'px';
+                    gameBox.appendChild(brick);
+                    bricks.push(brick);
+                }
+            }
+        }
+
+        // 移动挡板（适配手机触摸+电脑鼠标）
+        function movePaddle(e) {
+            let x;
+            if (e.type === 'touchmove') {
+                // 触摸事件
+                x = e.touches[0].clientX - gameBox.getBoundingClientRect().left;
+            } else {
+                // 鼠标事件
+                x = e.clientX - gameBox.getBoundingClientRect().left;
+            }
+            // 挡板不超出游戏框
+            if (x < 0) x = 0;
+            if (x > boxWidth - paddle.offsetWidth) x = boxWidth - paddle.offsetWidth;
+            paddle.style.left = x + 'px';
+        }
+
+        // 游戏主循环
+        function gameLoop() {
+            // 小球移动
+            let ballLeft = parseFloat(ball.style.left) || (boxWidth / 2 - 10);
+            let ballTop = parseFloat(ball.style.top) || (boxHeight / 2 - 10);
+            ballLeft += ballX;
+            ballTop += ballY;
+
+            // 小球撞左右边界反弹
+            if (ballLeft <= 0 || ballLeft >= boxWidth - 20) {
+                ballX = -ballX;
+            }
+            // 小球撞上边界反弹
+            if (ballTop <= 0) {
+                ballY = -ballY;
+            }
+            // 小球撞下边界（游戏结束）
+            if (ballTop >= boxHeight - 20) {
+                gameOver();
+                return;
+            }
+
+            // 小球撞挡板反弹
+            if (isCollide(ball, paddle)) {
+                // 偏心率反弹（让小球随挡板位置改变方向）
+                const paddleLeft = parseFloat(paddle.style.left) || (boxWidth / 2 - 40);
+                const hitX = ballLeft + 10 - (paddleLeft + 40);
+                ballX = hitX / 20 * 3;
+                ballY = -Math.abs(ballY);
+            }
+
+            // 小球撞方块（消除方块+加分+反弹）
+            bricks.forEach((brick, index) => {
+                if (isCollide(ball, brick)) {
+                    ballY = -ballY;
+                    brick.remove();
+                    bricks.splice(index, 1);
+                    score += 10;
+                    scoreNum.innerText = score;
+                    // 所有方块消除（游戏胜利）
+                    if (bricks.length === 0) {
+                        clearInterval(gameTimer);
+                        alert(`恭喜胜利！最终分数：${score}`);
+                        gameBtn.style.display = 'block';
+                        gameBtn.innerText = '再来一局';
+                    }
+                }
+            });
+
+            // 更新小球位置
+            ball.style.left = ballLeft + 'px';
+            ball.style.top = ballTop + 'px';
+        }
+
+        // 碰撞检测
+        function isCollide(obj1, obj2) {
+            const rect1 = obj1.getBoundingClientRect();
+            const rect2 = obj2.getBoundingClientRect();
+            const gameRect = gameBox.getBoundingClientRect();
+            // 转换为游戏框内的相对坐标
+            const r1 = {
+                left: rect1.left - gameRect.left,
+                top: rect1.top - gameRect.top,
+                right: rect1.right - gameRect.left,
+                bottom: rect1.bottom - gameRect.top
+            };
+            const r2 = {
+                left: rect2.left - gameRect.left,
+                top: rect2.top - gameRect.top,
+                right: rect2.right - gameRect.left,
+                bottom: rect2.bottom - gameRect.top
+            };
+            // 矩形碰撞判断
+            return r1.left < r2.right && r1.right > r2.left && r1.top < r2.bottom && r1.bottom > r2.top;
+        }
+
+        // 游戏结束
+        function gameOver() {
+            clearInterval(gameTimer);
+            alert(`游戏结束！你的分数：${score}`);
+            gameBtn.style.display = 'block';
+            gameBtn.innerText = '重新开始';
+        }
+    </style>
+</body>
+</html>
